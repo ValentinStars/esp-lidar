@@ -5,6 +5,8 @@ import os
 import json
 import time
 from flask import Flask, render_template, jsonify, request
+
+import config
 from models import init_db, DeviceRepository
 from discovery_service import DiscoveryService
 from mqtt_service import MqttService
@@ -12,8 +14,15 @@ from mqtt_service import MqttService
 app = Flask(__name__)
 
 # глобальные экземпляры сервисов
-discovery_service = DiscoveryService(broadcast_port=44444, heartbeat_port=5000, mqtt_port=1883)
-mqtt_service = MqttService(broker_host="127.0.0.1", broker_port=1883)
+discovery_service = DiscoveryService(
+    broadcast_port=config.DISCOVERY_PORT,
+    heartbeat_port=5000,
+    mqtt_port=config.MQTT_PORT
+)
+mqtt_service = MqttService(
+    broker_host=config.MQTT_BROKER,
+    broker_port=config.MQTT_PORT
+)
 
 @app.route('/')
 def index():
@@ -28,40 +37,49 @@ def device_calibration(sn):
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     # агрегированная статистика по всей системе
-    devices = DeviceRepository.get_all_devices()
-    total_devices = len(devices)
-    online_devices = sum(1 for d in devices if d.get('is_online'))
-    alerts = DeviceRepository.get_recent_alerts(100)
-    
-    return jsonify({
-        "total_devices": total_devices,
-        "online_devices": online_devices,
-        "offline_devices": total_devices - online_devices,
-        "total_alerts": len(alerts),
-        "mqtt_connected": mqtt_service.is_connected,
-        "server_time": time.time()
-    })
+    try:
+        devices = DeviceRepository.get_all_devices()
+        total_devices = len(devices)
+        online_devices = sum(1 for d in devices if d.get('is_online'))
+        alerts = DeviceRepository.get_recent_alerts(100)
+
+        return jsonify({
+            "total_devices": total_devices,
+            "online_devices": online_devices,
+            "offline_devices": total_devices - online_devices,
+            "total_alerts": len(alerts),
+            "mqtt_connected": mqtt_service.is_connected,
+            "server_time": time.time()
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/devices', methods=['GET'])
 def get_devices():
     # список всех зарегистрированных устройств
-    devices = DeviceRepository.get_all_devices()
-    return jsonify(devices)
+    try:
+        devices = DeviceRepository.get_all_devices()
+        return jsonify(devices)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/devices/<sn>', methods=['GET'])
 def get_device(sn):
     # получение детальной информации по конкретному серийному номеру
-    device = DeviceRepository.get_device_by_sn(sn)
-    if not device:
-        return jsonify({"error": "Устройство не найдено"}), 404
-    return jsonify(device)
+    try:
+        device = DeviceRepository.get_device_by_sn(sn)
+        if not device:
+            return jsonify({"error": "Устройство не найдено"}), 404
+        return jsonify(device)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/devices/<sn>/cmd', methods=['POST'])
 def send_device_cmd(sn):
     # отправка управляющей команды на устройство (по mqtt или udp)
     data = request.get_json() or {}
     cmd = data.get("cmd")
-    
+
     if not cmd:
         return jsonify({"error": "Команда не указана"}), 400
 
@@ -91,7 +109,7 @@ def send_calibration_data(sn):
 
     topic = f"lidar/{sn}/calib_data"
     payload = json.dumps(data)
-    
+
     if mqtt_service.is_connected and mqtt_service.client:
         mqtt_service.client.publish(topic, payload)
         print(f"[CALIB] Настройки зон отправлены на узел {sn}")
@@ -102,9 +120,12 @@ def send_calibration_data(sn):
 @app.route('/api/alerts', methods=['GET'])
 def get_alerts():
     # получение последних зафиксированных алертов
-    limit = request.args.get('limit', default=50, type=int)
-    alerts = DeviceRepository.get_recent_alerts(limit)
-    return jsonify(alerts)
+    try:
+        limit = request.args.get('limit', default=50, type=int)
+        alerts = DeviceRepository.get_recent_alerts(limit)
+        return jsonify(alerts)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 def start_background_services():
     # инициализация базы данных и запуск сетевых служб
@@ -114,5 +135,5 @@ def start_background_services():
 
 if __name__ == '__main__':
     start_background_services()
-    print("[SERVER] Веб-сервер запускается на http://0.0.0.0:8080")
-    app.run(host='0.0.0.0', port=8080, debug=False)
+    print(f"[SERVER] Веб-сервер запускается на http://{config.WEB_HOST}:{config.WEB_PORT}")
+    app.run(host=config.WEB_HOST, port=config.WEB_PORT, debug=False)

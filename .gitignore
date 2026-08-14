@@ -1,0 +1,23 @@
+# python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# platformio
+firmware/.pio/
+firmware/.vscode/
+
+# бд (создается при старте)
+*.db
+
+# ide
+.idea/
+*.swp
+*.swo
+*~
+
+# os
+.DS_Store
+Thumbs.db
