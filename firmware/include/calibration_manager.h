@@ -37,6 +37,9 @@ public:
     // получение текущего списка зон
     const GlassZone* getZones() const { return zones; }
     uint8_t getZonesCount() const { return zonesCount; }
+    
+    // доступ к текущему радиальному скану (360 точек)
+    const uint16_t* getScanDistances() const { return scanDistances; }
 
 private:
     // радиальный массив дистанций для каждого градуса (0-359)

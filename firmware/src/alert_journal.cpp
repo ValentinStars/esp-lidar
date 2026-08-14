@@ -77,7 +77,11 @@ size_t AlertJournal::toJson(char *buffer, size_t bufferSize) const {
         AlertRecord rec;
         if (!getAlert(i, rec)) continue;
 
-        const char *typeStr = (rec.type == ALERT_DESTRUCTION) ? "destruction" : "proximity";
+        const char *typeStr = "unknown";
+        if (rec.type == ALERT_DESTRUCTION) typeStr = "destruction";
+        else if (rec.type == ALERT_PROXIMITY) typeStr = "proximity";
+        else if (rec.type == ALERT_RESTORED) typeStr = "restored";
+
         int written = snprintf(
             buffer + offset, 
             bufferSize - offset,

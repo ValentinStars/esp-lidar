@@ -5,8 +5,8 @@ DB_TYPE = os.getenv("DB_TYPE", "sqlite")
 
 # настройки подключения для mysql (применимо только если DB_TYPE == "mysql")
 MYSQL_HOST = os.getenv("MYSQL_HOST", "127.0.0.1")
-MYSQL_USER = os.getenv("MYSQL_USER", "root")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
+MYSQL_USER = os.getenv("MYSQL_USER", "lidar_user")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "lidar_pass")
 MYSQL_DB = os.getenv("MYSQL_DB", "lidar_network")
 
 # путь к файлу sqlite (применимо только если DB_TYPE == "sqlite")

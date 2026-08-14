@@ -8,6 +8,7 @@
 #include "ota_manager.h"
 #include "flash_buffer.h"
 #include "calibration_manager.h"
+#include "monitoring_manager.h"
 
 // глобальная переменная текущего режима
 uint8_t currentMode = MODE_UNCONFIGURED;
@@ -19,7 +20,7 @@ HardwareSerial LidarSerial(1);
 static D500Parser lidarParser;
 
 // объект локального кольцевого журнала на 10 алертов в ram
-static AlertJournal alertJournal;
+AlertJournal alertJournal;
 
 // таймер периодического вывода служебной телеметрии
 static uint32_t lastTelemetryTime = 0;
@@ -111,6 +112,9 @@ void loop() {
         lidarParser.getCrcErrors(),
         alertJournal
     );
+
+    // вызов ядра мониторинга стёкол
+    monitoringManager.process();
 
     // проверка входящих команд управления с хоста через usb cdc
     while (Serial.available() > 0) {

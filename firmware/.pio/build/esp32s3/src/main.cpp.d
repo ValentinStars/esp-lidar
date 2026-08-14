@@ -201,4 +201,5 @@
  include/calibration_manager.h \
  .pio/libdeps/esp32s3/ArduinoJson/src/ArduinoJson.h \
  .pio/libdeps/esp32s3/ArduinoJson/src/ArduinoJson.hpp \
- .pio/libdeps/esp32s3/ArduinoJson/src/ArduinoJson/Configuration.hpp
+ .pio/libdeps/esp32s3/ArduinoJson/src/ArduinoJson/Configuration.hpp \
+ include/monitoring_manager.h
