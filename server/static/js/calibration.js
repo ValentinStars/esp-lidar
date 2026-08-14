@@ -25,6 +25,9 @@ let isDrawing = false;
 let startDrawAngle = 0;
 let currentDrawAngle = 0;
 
+// угол наведения для диагностики
+let hoverAngle = -1;
+
 document.addEventListener('DOMContentLoaded', () => {
     // кнопка переключения в режим калибровки
     document.getElementById('btnStartCalibMode').addEventListener('click', async () => {
@@ -96,8 +99,30 @@ function handleMouseDown(e) {
 }
 
 function handleMouseMove(e) {
-    if (!isDrawing) return;
-    currentDrawAngle = getMouseAngle(e);
+    let rawAngle = getMouseAngle(e);
+    
+    // обновление панели диагностики (курсор)
+    hoverAngle = Math.round(rawAngle);
+    const hAngleEl = document.getElementById('diagHoverAngle');
+    const hDistEl = document.getElementById('diagHoverDist');
+    
+    if (hAngleEl && hDistEl) {
+        hAngleEl.textContent = `${hoverAngle}°`;
+        const dist = currentScan[hoverAngle] || 0;
+        if (dist > 0) {
+            hDistEl.textContent = `${dist} мм (${(dist/10).toFixed(1)} см)`;
+            hDistEl.style.color = "var(--accent-green)";
+        } else {
+            hDistEl.textContent = `-- мм (-- см)`;
+            hDistEl.style.color = "var(--text-muted)";
+        }
+    }
+
+    if (!isDrawing) {
+        drawRadar();
+        return;
+    }
+    currentDrawAngle = rawAngle;
     drawRadar();
 }
 
@@ -312,9 +337,27 @@ function drawRadar() {
             const px = centerX + Math.cos(rad) * (dist * scale);
             const py = centerY + Math.sin(rad) * (dist * scale);
             
-            ctx.beginPath();
-            ctx.arc(px, py, 2, 0, 2 * Math.PI);
-            ctx.fill();
+            // выделение точки под курсором красным цветом и размером побольше
+            if (i === hoverAngle) {
+                ctx.fillStyle = '#ff7b72';
+                ctx.beginPath();
+                ctx.arc(px, py, 4, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // линия-лазер от центра
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(px, py);
+                ctx.strokeStyle = 'rgba(255, 123, 114, 0.5)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                
+                ctx.fillStyle = '#58a6ff'; // возврат цвета
+            } else {
+                ctx.beginPath();
+                ctx.arc(px, py, 2, 0, 2 * Math.PI);
+                ctx.fill();
+            }
         }
     }
 
@@ -330,3 +373,30 @@ function drawRadar() {
         ctx.fill();
     }
 }
+
+// ручной запрос угла из панели диагностики
+window.queryManualAngle = () => {
+    const input = document.getElementById('diagManualAngle');
+    const result = document.getElementById('diagManualResult');
+    if (!input || !result) return;
+    
+    let angle = parseInt(input.value);
+    if (isNaN(angle) || angle < 0 || angle > 359) {
+        result.textContent = "Некорректный угол!";
+        result.style.color = "var(--text-red)";
+        return;
+    }
+    
+    const dist = currentScan[angle] || 0;
+    if (dist > 0) {
+        result.textContent = `${dist} мм (${(dist/10).toFixed(1)} см)`;
+        result.style.color = "var(--accent-green)";
+    } else {
+        result.textContent = "Нет эха (0 мм)";
+        result.style.color = "var(--text-yellow)";
+    }
+    
+    // форсируем подсветку этого луча на канвасе
+    hoverAngle = angle;
+    drawRadar();
+};

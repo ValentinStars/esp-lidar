@@ -83,15 +83,36 @@
 
         <div class="calibration-container">
             <!-- интерактивный радар -->
-            <div class="glass-card">
-                <div class="section-header">
-                    <h3>Полярная карта точек (Live)</h3>
-                    <span class="badge badge-monitoring" id="scanStatusBadge">Ожидание данных...</span>
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <h3>Полярная карта точек (Live)</h3>
+                        <span class="badge badge-monitoring" id="scanStatusBadge">Ожидание данных...</span>
+                    </div>
+                    <div class="canvas-wrapper">
+                        <canvas id="lidarCanvas" width="800" height="800"></canvas>
+                    </div>
+                    <p class="text-muted" style="margin-top:12px; font-size:0.8rem;">Используйте мышь для выделения секторов на радаре. Зажмите ЛКМ и тяните по кругу для создания зоны.</p>
                 </div>
-                <div class="canvas-wrapper">
-                    <canvas id="lidarCanvas" width="800" height="800"></canvas>
+                
+                <!-- панель диагностики -->
+                <div class="glass-card">
+                    <div class="section-header">
+                        <h3>Диагностика лидара</h3>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 12px; font-family: 'JetBrains Mono', monospace;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px;">
+                            <span>Курсор (Угол): <strong id="diagHoverAngle" style="color: var(--accent-blue);">--°</strong></span>
+                            <span>Дистанция: <strong id="diagHoverDist" style="color: var(--accent-green);">-- мм (-- см)</strong></span>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px;">
+                            <label style="font-size: 0.9rem;">Точный запрос:</label>
+                            <input type="number" id="diagManualAngle" min="0" max="359" placeholder="Угол °" style="width: 80px; padding: 6px; background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); color: white; border-radius: 4px;">
+                            <button class="btn btn-secondary btn-sm" onclick="queryManualAngle()">Запросить</button>
+                            <span id="diagManualResult" style="margin-left: auto; color: var(--text-main);">-- мм</span>
+                        </div>
+                    </div>
                 </div>
-                <p class="text-muted" style="margin-top:12px; font-size:0.8rem;">Используйте мышь для выделения секторов на радаре. Зажмите ЛКМ и тяните по кругу для создания зоны.</p>
             </div>
 
             <!-- панель настроек зон -->

@@ -97,6 +97,7 @@ async function fetchDevicesData() {
                     <td class="mono ${d.alerts_count > 0 ? 'text-red font-bold' : ''}">${d.alerts_count || 0}</td>
                     <td class="text-muted">${d.last_seen_sec_ago} с назад</td>
                     <td>
+                        <a href="/device/${d.sn}" class="btn btn-primary btn-sm" style="text-decoration: none; padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;">Диагностика</a>
                         <button class="btn btn-secondary btn-sm" onclick="openCmdModal('${d.sn}')">Управление ⚙️</button>
                     </td>
                 </tr>
@@ -127,9 +128,16 @@ async function fetchAlertsData() {
         tableBody.innerHTML = alerts.map(a => {
             const timeStr = new Date(a.timestamp * 1000).toLocaleTimeString('ru-RU');
             const deltaSign = a.delta_mm > 0 ? `+${a.delta_mm}` : `${a.delta_mm}`;
-            const typeBadge = a.alert_type === 'destruction'
-                ? `<span class="badge badge-offline text-red">РАЗРУШЕНИЕ (+Δ)</span>`
-                : `<span class="badge badge-unconfigured">ПРИБЛИЖЕНИЕ (-Δ)</span>`;
+            let typeBadge = '';
+            if (a.alert_type === 'destruction') {
+                typeBadge = `<span class="badge badge-offline text-red">РАЗРУШЕНИЕ (+Δ)</span>`;
+            } else if (a.alert_type === 'proximity') {
+                typeBadge = `<span class="badge badge-unconfigured">ПРИБЛИЖЕНИЕ (-Δ)</span>`;
+            } else if (a.alert_type === 'restored') {
+                typeBadge = `<span class="badge badge-monitoring" style="color: #3fb950; border-color: #3fb950;">ВОССТАНОВЛЕНО</span>`;
+            } else {
+                typeBadge = `<span class="badge badge-unconfigured">${a.alert_type}</span>`;
+            }
 
             return `
                 <tr>
