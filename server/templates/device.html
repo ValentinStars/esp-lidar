@@ -97,12 +97,14 @@
             <!-- панель настроек зон -->
             <div class="glass-card controls-panel">
                 <div class="section-header">
-                    <h3>Конфигурация (6 Стёкол)</h3>
-                    <button class="btn btn-secondary btn-sm" id="btnAddZone">+ Добавить зону</button>
+                    <h3>Конфигурация стёкол</h3>
+                    <div>
+                        <button class="btn btn-secondary btn-sm" id="btnAddPane">+ Добавить стекло</button>
+                    </div>
                 </div>
 
-                <div id="zonesContainer" style="max-height: 500px; overflow-y: auto; padding-right: 8px;">
-                    <!-- карточки зон генерируются js -->
+                <div id="panesContainer" style="max-height: 500px; overflow-y: auto; padding-right: 8px; display: flex; flex-direction: column; gap: 12px;">
+                    <!-- карточки стекол генерируются js -->
                 </div>
 
                 <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 10px;">

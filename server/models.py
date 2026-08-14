@@ -29,45 +29,29 @@ def init_db():
             free_heap INTEGER DEFAULT 0,
             valid_packets INTEGER DEFAULT 0,
             crc_errors INTEGER DEFAULT 0,
+            sn VARCHAR(64) PRIMARY KEY,
+            mac VARCHAR(32),
+            ip VARCHAR(32),
+            status VARCHAR(32),
             alerts_count INTEGER DEFAULT 0,
-            last_seen REAL NOT NULL,
-            created_at REAL NOT NULL
+            last_seen REAL,
+            config_json TEXT
         )
     ''')
-
-    # таблица истории heartbeat телеметрии
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS heartbeats (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sn TEXT NOT NULL,
-            ip TEXT NOT NULL,
-            uptime INTEGER,
-            free_heap INTEGER,
-            valid_packets INTEGER,
-            crc_errors INTEGER,
-            alerts_count INTEGER,
-            timestamp REAL NOT NULL,
-            FOREIGN KEY (sn) REFERENCES devices(sn)
-        )
-    ''')
-
-    # таблица алертов и инцидентов
-    cursor.execute('''
+    
+    # таблица истории алертов (срабатываний)
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS alerts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sn TEXT NOT NULL,
-            timestamp REAL NOT NULL,
+            id INTEGER PRIMARY KEY {auto_inc},
+            sn VARCHAR(64),
+            timestamp DATETIME,
             pane_id INTEGER,
             zone_id INTEGER,
-            alert_type TEXT,
-            distance_mm INTEGER,
-            calib_dist_mm INTEGER,
-            delta_mm INTEGER,
-            raw_payload TEXT,
-            FOREIGN KEY (sn) REFERENCES devices(sn)
+            alert_type VARCHAR(32),
+            delta_mm INTEGER
         )
     ''')
-
+    
     conn.commit()
     conn.close()
 
@@ -77,104 +61,107 @@ latest_scans = {}
 class DeviceRepository:
     @staticmethod
     def register_or_update(sn, mac, ip, status="unconfigured", alerts_count=0):
-        # регистрация нового или обновление существующего устройства по sn
+        # обновление состояния устройства при получении heartbeat или discovery
         conn = get_db_connection()
         cursor = conn.cursor()
-        now = time.time()
         
-        cursor.execute('SELECT sn FROM devices WHERE sn = ?', (sn,))
-        exists = cursor.fetchone()
-        
-        if exists:
+        # кроссплатформенный upsert (mysql и sqlite имеют разный синтаксис)
+        if config.DB_TYPE == "mysql":
             cursor.execute('''
-                UPDATE devices 
-                SET mac = ?, ip = ?, status = ?, alerts_count = ?, last_seen = ?
-                WHERE sn = ?
-            ''', (mac, ip, status, alerts_count, now, sn))
+                INSERT INTO devices (sn, mac, ip, status, alerts_count, last_seen)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                mac=VALUES(mac), ip=VALUES(ip), status=VALUES(status),
+                alerts_count=VALUES(alerts_count), last_seen=VALUES(last_seen)
+            ''', (sn, mac, ip, status, alerts_count, time.time()))
         else:
             cursor.execute('''
-                INSERT INTO devices (sn, mac, ip, status, alerts_count, last_seen, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (sn, mac, ip, status, alerts_count, now, now))
+                INSERT INTO devices (sn, mac, ip, status, alerts_count, last_seen)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(sn) DO UPDATE SET
+                mac=excluded.mac,
+                ip=excluded.ip,
+                status=excluded.status,
+                alerts_count=excluded.alerts_count,
+                last_seen=excluded.last_seen
+            ''', (sn, mac, ip, status, alerts_count, time.time()))
             
         conn.commit()
         conn.close()
 
     @staticmethod
-    def record_heartbeat(sn, ip, uptime, free_heap, valid_pkts, crc_errors, alerts_count, status="unconfigured", mode=1):
-        # обновление текущего состояния устройства и фиксация в истории
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        now = time.time()
-
-        cursor.execute('''
-            UPDATE devices 
-            SET ip = ?, status = ?, mode = ?, uptime = ?, free_heap = ?,
-                valid_packets = ?, crc_errors = ?, alerts_count = ?, last_seen = ?
-            WHERE sn = ?
-        ''', (ip, status, mode, uptime, free_heap, valid_pkts, crc_errors, alerts_count, now, sn))
-
-        cursor.execute('''
-            INSERT INTO heartbeats (sn, ip, uptime, free_heap, valid_packets, crc_errors, alerts_count, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (sn, ip, uptime, free_heap, valid_pkts, crc_errors, alerts_count, now))
-
-        conn.commit()
-        conn.close()
-
-    @staticmethod
-    def record_alert(sn, pane_id, zone_id, alert_type, dist, calib, delta, raw_json=""):
-        # сохранение поступившего алерта в базу данных
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        now = time.time()
-
-        cursor.execute('''
-            INSERT INTO alerts (sn, timestamp, pane_id, zone_id, alert_type, distance_mm, calib_dist_mm, delta_mm, raw_payload)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (sn, now, pane_id, zone_id, alert_type, dist, calib, delta, raw_json))
-
-        conn.commit()
-        conn.close()
-
-    @staticmethod
     def get_all_devices():
-        # получение списка всех зарегистрированных устройств с вычислением онлайн-статуса
+        # получение полного списка устройств
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM devices ORDER BY last_seen DESC')
+        cursor.execute("SELECT * FROM devices ORDER BY last_seen DESC")
         rows = cursor.fetchall()
         conn.close()
-
+        
         devices = []
         now = time.time()
-        for r in rows:
-            d = dict(r)
-            # если последний сигнал был более 45 секунд назад - считаем офлайн
-            d['is_online'] = (now - d['last_seen'] < 45.0)
-            d['last_seen_sec_ago'] = int(now - d['last_seen'])
+        for row in rows:
+            d = dict(row)
+            # узел считается оффлайн если не было сигнала более 45 секунд (3 пропуска heartbeat)
+            d['is_online'] = (now - d['last_seen']) < 45.0
             devices.append(d)
         return devices
 
     @staticmethod
-    def get_device_by_sn(sn):
+    def get_device(sn):
+        # получение данных одного конкретного устройства по его sn
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM devices WHERE sn = ?', (sn,))
+        if config.DB_TYPE == "mysql":
+            cursor.execute("SELECT * FROM devices WHERE sn = %s", (sn,))
+        else:
+            cursor.execute("SELECT * FROM devices WHERE sn = ?", (sn,))
         row = cursor.fetchone()
         conn.close()
-        if row:
-            d = dict(row)
-            d['is_online'] = (time.time() - d['last_seen'] < 45.0)
-            return d
-        return None
+        return dict(row) if row else None
+
+    @staticmethod
+    def update_config(sn, config_dict):
+        # сохранение конфигурации зон стекла в базу
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cfg_str = json.dumps(config_dict)
+        if config.DB_TYPE == "mysql":
+            cursor.execute("UPDATE devices SET config_json = %s WHERE sn = %s", (cfg_str, sn))
+        else:
+            cursor.execute("UPDATE devices SET config_json = ? WHERE sn = ?", (cfg_str, sn))
+        conn.commit()
+        conn.close()
+
+class AlertRepository:
+    @staticmethod
+    def add_alert(sn, pane_id, zone_id, alert_type, delta_mm, ts_epoch=None):
+        # регистрация нового алерта о повреждении или приближении в общую базу
+        dt = datetime.fromtimestamp(ts_epoch) if ts_epoch else datetime.now()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        if config.DB_TYPE == "mysql":
+            cursor.execute('''
+                INSERT INTO alerts (sn, timestamp, pane_id, zone_id, alert_type, delta_mm)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            ''', (sn, dt, pane_id, zone_id, alert_type, delta_mm))
+        else:
+            cursor.execute('''
+                INSERT INTO alerts (sn, timestamp, pane_id, zone_id, alert_type, delta_mm)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (sn, dt, pane_id, zone_id, alert_type, delta_mm))
+        conn.commit()
+        conn.close()
 
     @staticmethod
     def get_recent_alerts(limit=50):
         # получение последних алертов
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM alerts ORDER BY timestamp DESC LIMIT ?', (limit,))
+        if config.DB_TYPE == "mysql":
+            cursor.execute("SELECT * FROM alerts ORDER BY timestamp DESC LIMIT %s", (limit,))
+        else:
+            cursor.execute("SELECT * FROM alerts ORDER BY timestamp DESC LIMIT ?", (limit,))
         rows = cursor.fetchall()
         conn.close()
         return [dict(r) for r in rows]

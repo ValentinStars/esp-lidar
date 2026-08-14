@@ -15,8 +15,9 @@ const scale = (width / 2 - 20) / maxDistance;
 // данные последнего скана: массив 360 значений
 let currentScan = new Array(360).fill(0);
 
-// список заданных зон
-let zones = [];
+// список заданных стекол (panes) и зон
+let panes = [];
+let nextPaneId = 1;
 let nextZoneId = 1;
 
 // флаги рисования мышью
@@ -55,9 +56,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // добавление пустой зоны
-    document.getElementById('btnAddZone').addEventListener('click', () => {
-        addZone(Math.floor(zones.length / 4) + 1, nextZoneId, 0, 90, 2000, 150);
+    // добавление нового стекла
+    document.getElementById('btnAddPane').addEventListener('click', () => {
+        panes.push({ id: nextPaneId++, zones: [] });
+        renderPanes();
     });
 
     // сохранение и отправка зон
@@ -111,7 +113,9 @@ function handleMouseUp(e) {
     }
     
     if (Math.abs(start - end) > 2) {
-        addZone(Math.floor(zones.length / 4) + 1, nextZoneId, start, end, 2500, 150);
+        if (panes.length === 0) panes.push({ id: nextPaneId++, zones: [] });
+        let targetPane = panes[panes.length - 1];
+        addZone(targetPane.id, start, end, 2500, 150);
     }
     drawRadar();
 }
@@ -133,89 +137,114 @@ async function pollRawScan() {
 }
 
 // добавление ui карточки зоны
-function addZone(paneId, zId, startA, endA, baseline, tol) {
-    const zone = {
-        internalId: zId,
-        paneId: paneId,
-        zoneId: zId,
+function addZone(paneId, startA, endA, baseline, tol) {
+    const pane = panes.find(p => p.id === paneId);
+    if (!pane) return;
+    pane.zones.push({
+        internalId: nextZoneId++,
+        zoneId: pane.zones.length + 1,
         start_a: startA,
         end_a: endA,
         baseline: baseline,
         tolerance: tol
-    };
-    zones.push(zone);
-    nextZoneId++;
-    renderZoneCards();
+    });
+    renderPanes();
 }
 
-function deleteZone(id) {
-    zones = zones.filter(z => z.internalId !== id);
-    renderZoneCards();
-    drawRadar();
-}
-
-function updateZoneData(id, field, value) {
-    const z = zones.find(z => z.internalId === id);
-    if (z) {
-        z[field] = parseInt(value) || 0;
+function deleteZone(paneId, internalId) {
+    const pane = panes.find(p => p.id === paneId);
+    if (pane) {
+        pane.zones = pane.zones.filter(z => z.internalId !== internalId);
+        // переиндексация
+        pane.zones.forEach((z, i) => z.zoneId = i + 1);
+        renderPanes();
         drawRadar();
     }
 }
 
-function renderZoneCards() {
-    const container = document.getElementById('zonesContainer');
-    container.innerHTML = zones.map(z => `
-        <div class="zone-card">
-            <div style="display: flex; justify-content: space-between;">
-                <strong>Стекло ${z.paneId} - Зона ${z.zoneId}</strong>
-                <button class="btn btn-secondary btn-sm" onclick="deleteZone(${z.internalId})" style="color: #f85149; padding: 2px 6px;">×</button>
+function deletePane(paneId) {
+    panes = panes.filter(p => p.id !== paneId);
+    renderPanes();
+    drawRadar();
+}
+
+function updateZoneData(paneId, internalId, field, value) {
+    const pane = panes.find(p => p.id === paneId);
+    if (pane) {
+        const z = pane.zones.find(z => z.internalId === internalId);
+        if (z) {
+            z[field] = parseInt(value) || 0;
+            drawRadar();
+        }
+    }
+}
+
+// создание глобальных обработчиков для onclick в html
+window.addZoneToPane = (paneId) => {
+    addZone(paneId, 0, 90, 2000, 150);
+};
+window.deleteZone = deleteZone;
+window.deletePane = deletePane;
+window.updateZoneData = updateZoneData;
+
+function renderPanes() {
+    const container = document.getElementById('panesContainer');
+    container.innerHTML = panes.map(p => `
+        <div class="pane-card" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <strong style="color: var(--text-main);">Стекло ${p.id}</strong>
+                <div>
+                    <button class="btn btn-secondary btn-sm" onclick="addZoneToPane(${p.id})">+ Зона</button>
+                    <button class="btn btn-secondary btn-sm" onclick="deletePane(${p.id})" style="color: #f85149; margin-left: 8px;">Удалить</button>
+                </div>
             </div>
-            <div class="zone-inputs">
-                <div>
-                    <label style="font-size: 0.7rem; color: #8b949e;">Начало (°)</label>
-                    <input type="number" value="${z.start_a}" onchange="updateZoneData(${z.internalId}, 'start_a', this.value)">
+            ${p.zones.map(z => `
+                <div class="zone-card" style="background: rgba(0,0,0,0.2); border: 1px dashed var(--border-color); padding: 8px; border-radius: 6px; margin-top: 8px;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="font-size: 0.8rem; color: #8b949e;">Зона ${z.zoneId}</span>
+                        <button class="btn btn-secondary btn-sm" onclick="deleteZone(${p.id}, ${z.internalId})" style="color: #f85149; padding: 2px 6px;">×</button>
+                    </div>
+                    <div class="zone-inputs">
+                        <div>
+                            <label style="font-size: 0.7rem; color: #8b949e;">Начало (°)</label>
+                            <input type="number" value="${z.start_a}" onchange="updateZoneData(${p.id}, ${z.internalId}, 'start_a', this.value)">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.7rem; color: #8b949e;">Конец (°)</label>
+                            <input type="number" value="${z.end_a}" onchange="updateZoneData(${p.id}, ${z.internalId}, 'end_a', this.value)">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.7rem; color: #8b949e;">Дистанция</label>
+                            <input type="number" value="${z.baseline}" onchange="updateZoneData(${p.id}, ${z.internalId}, 'baseline', this.value)">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.7rem; color: #8b949e;">Погрешность</label>
+                            <input type="number" value="${z.tolerance}" onchange="updateZoneData(${p.id}, ${z.internalId}, 'tolerance', this.value)">
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <label style="font-size: 0.7rem; color: #8b949e;">Конец (°)</label>
-                    <input type="number" value="${z.end_a}" onchange="updateZoneData(${z.internalId}, 'end_a', this.value)">
-                </div>
-                <div>
-                    <label style="font-size: 0.7rem; color: #8b949e;">Дистанция (мм)</label>
-                    <input type="number" value="${z.baseline}" onchange="updateZoneData(${z.internalId}, 'baseline', this.value)">
-                </div>
-                <div>
-                    <label style="font-size: 0.7rem; color: #8b949e;">Погрешность (мм)</label>
-                    <input type="number" value="${z.tolerance}" onchange="updateZoneData(${z.internalId}, 'tolerance', this.value)">
-                </div>
-            </div>
+            `).join('')}
         </div>
     `).join('');
 }
 
 // отправка сформированного массива зон на сервер
 async function saveZones() {
-    // группировка по стеклам
-    const panesMap = {};
-    zones.forEach(z => {
-        if (!panesMap[z.paneId]) {
-            panesMap[z.paneId] = [];
-        }
-        panesMap[z.paneId].push({
-            id: z.zoneId,
-            start_a: z.start_a,
-            end_a: z.end_a,
-            baseline: z.baseline,
-            tolerance: z.tolerance
-        });
-    });
-
     const payload = { panes: [] };
-    for (const [pId, zArr] of Object.entries(panesMap)) {
-        payload.panes.push({
-            id: parseInt(pId),
-            zones: zArr
-        });
-    }
+    panes.forEach(p => {
+        if (p.zones.length > 0) {
+            payload.panes.push({
+                id: p.id,
+                zones: p.zones.map(z => ({
+                    id: z.zoneId,
+                    start_a: z.start_a,
+                    end_a: z.end_a,
+                    baseline: z.baseline,
+                    tolerance: z.tolerance
+                }))
+            });
+        }
+    });
 
     try {
         const res = await fetch(`/api/devices/${DEVICE_SN}/calibrate`, {
@@ -254,22 +283,24 @@ function drawRadar() {
     ctx.stroke();
 
     // отрисовка сконфигурированных зон
-    zones.forEach(z => {
-        const startRad = (z.start_a - 90) * Math.PI / 180;
-        const endRad = (z.end_a - 90) * Math.PI / 180;
-        
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, z.baseline * scale, startRad, endRad);
-        ctx.strokeStyle = '#3fb950';
-        ctx.lineWidth = 3;
-        ctx.stroke();
+    panes.forEach(p => {
+        p.zones.forEach(z => {
+            const startRad = (z.start_a - 90) * Math.PI / 180;
+            const endRad = (z.end_a - 90) * Math.PI / 180;
+            
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, z.baseline * scale, startRad, endRad);
+            ctx.strokeStyle = '#3fb950';
+            ctx.lineWidth = 3;
+            ctx.stroke();
 
-        // погрешность (полупрозрачная заливка)
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, (z.baseline + z.tolerance) * scale, startRad, endRad);
-        ctx.arc(centerX, centerY, (z.baseline - z.tolerance) * scale, endRad, startRad, true);
-        ctx.fillStyle = 'rgba(63, 185, 80, 0.15)';
-        ctx.fill();
+            // погрешность (полупрозрачная заливка)
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, (z.baseline + z.tolerance) * scale, startRad, endRad);
+            ctx.arc(centerX, centerY, (z.baseline - z.tolerance) * scale, endRad, startRad, true);
+            ctx.fillStyle = 'rgba(63, 185, 80, 0.15)';
+            ctx.fill();
+        });
     });
 
     // отрисовка сырого скана 360 точек

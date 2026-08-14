@@ -266,11 +266,16 @@ void NetworkManager::handleDiscoveryPacket(int packetSize, const AlertJournal &j
         // отправка немедленного ответа-подтверждения на сервер (discovery ack)
         const DeviceIdentity &identity = getDeviceIdentity();
         char responseBuf[384];
+        
+        const char* statusStr = "unconfigured";
+        if (currentMode == MODE_CALIBRATION) statusStr = "calibrating";
+        else if (currentMode == MODE_MONITORING) statusStr = "monitoring";
+
         snprintf(responseBuf, sizeof(responseBuf),
-                 "{\"role\":\"esp32_client\",\"sn\":\"%s\",\"mac\":\"%s\",\"ip\":\"%d.%d.%d.%d\",\"status\":\"unconfigured\",\"alerts_count\":%u}",
+                 "{\"role\":\"esp32_client\",\"sn\":\"%s\",\"mac\":\"%s\",\"ip\":\"%d.%d.%d.%d\",\"status\":\"%s\",\"alerts_count\":%u}",
                  identity.serialNumber, identity.macAddressStr,
                  Ethernet.localIP()[0], Ethernet.localIP()[1], Ethernet.localIP()[2], Ethernet.localIP()[3],
-                 (unsigned int)journal.getCount());
+                 statusStr, (unsigned int)journal.getCount());
 
         discoveryUdp.beginPacket(masterServerIP, discoveryUdp.remotePort());
         discoveryUdp.write((const uint8_t*)responseBuf, strlen(responseBuf));
@@ -289,13 +294,20 @@ void NetworkManager::sendHeartbeat(uint32_t totalPackets, uint32_t validPackets,
     const DeviceIdentity &identity = getDeviceIdentity();
     char heartbeatJson[512];
 
+    const char* statusStr = "unconfigured";
+    if (currentMode == MODE_CALIBRATION) {
+        statusStr = "calibrating";
+    } else if (currentMode == MODE_MONITORING) {
+        statusStr = "monitoring";
+    }
+
     snprintf(heartbeatJson, sizeof(heartbeatJson),
              "{\"type\":\"heartbeat\",\"sn\":\"%s\",\"mac\":\"%s\",\"ip\":\"%d.%d.%d.%d\","
-             "\"status\":\"unconfigured\",\"mode\":1,\"uptime\":%lu,\"free_heap\":%u,"
+             "\"status\":\"%s\",\"mode\":%u,\"uptime\":%lu,\"free_heap\":%u,"
              "\"lidar\":{\"valid_pkts\":%lu,\"crc_err\":%lu},\"alerts_count\":%u}",
              identity.serialNumber, identity.macAddressStr,
              Ethernet.localIP()[0], Ethernet.localIP()[1], Ethernet.localIP()[2], Ethernet.localIP()[3],
-             (unsigned long)(millis() / 1000), (unsigned int)ESP.getFreeHeap(),
+             statusStr, (unsigned int)currentMode, (unsigned long)(millis() / 1000), (unsigned int)ESP.getFreeHeap(),
              (unsigned long)validPackets, (unsigned long)crcErrors,
              (unsigned int)journal.getCount());
 
