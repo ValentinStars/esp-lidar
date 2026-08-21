@@ -1,3 +1,8 @@
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 // клиентский javascript для динамического обновления данных в реальном времени
 
 let selectedDeviceSn = null;
@@ -78,7 +83,7 @@ async function fetchDevicesData() {
                 ? `<span class="badge badge-online">ONLINE</span>` 
                 : `<span class="badge badge-offline">OFFLINE</span>`;
 
-            let modeBadge = `<span class="badge badge-unconfigured">${d.status}</span>`;
+            let modeBadge = `<span class="badge badge-unconfigured">${escapeHtml(d.status)}</span>`;
             if (d.status === 'monitoring') {
                 modeBadge = `<span class="badge badge-monitoring">МОНИТОРИНГ</span>`;
             }
@@ -86,9 +91,9 @@ async function fetchDevicesData() {
             return `
                 <tr>
                     <td>${statusBadge}</td>
-                    <td class="mono font-bold">${d.sn}</td>
-                    <td class="mono text-blue">${d.ip}</td>
-                    <td class="mono text-muted">${d.mac}</td>
+                    <td class="mono font-bold">${escapeHtml(d.sn)}</td>
+                    <td class="mono text-blue">${escapeHtml(d.ip)}</td>
+                    <td class="mono text-muted">${escapeHtml(d.mac)}</td>
                     <td>${modeBadge}</td>
                     <td class="mono">${d.uptime || 0} с</td>
                     <td class="mono">${Math.round((d.free_heap || 0) / 1024)} КБ</td>
@@ -97,8 +102,8 @@ async function fetchDevicesData() {
                     <td class="mono ${d.alerts_count > 0 ? 'text-red font-bold' : ''}">${d.alerts_count || 0}</td>
                     <td class="text-muted">${d.last_seen_sec_ago} с назад</td>
                     <td>
-                        <a href="/device/${d.sn}" class="btn btn-primary btn-sm" style="text-decoration: none; padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;">Диагностика</a>
-                        <button class="btn btn-secondary btn-sm" onclick="openCmdModal('${d.sn}')">Управление ⚙️</button>
+                        <a href="/device/${encodeURIComponent(d.sn)}" class="btn btn-primary btn-sm" style="text-decoration: none; padding: 4px 8px; font-size: 0.8rem; margin-right: 4px;">Диагностика</a>
+                        <button class="btn btn-secondary btn-sm" onclick="openCmdModal('${escapeHtml(d.sn)}')">Управление ⚙️</button>
                     </td>
                 </tr>
             `;
@@ -136,13 +141,13 @@ async function fetchAlertsData() {
             } else if (a.alert_type === 'restored') {
                 typeBadge = `<span class="badge badge-monitoring" style="color: #3fb950; border-color: #3fb950;">ВОССТАНОВЛЕНО</span>`;
             } else {
-                typeBadge = `<span class="badge badge-unconfigured">${a.alert_type}</span>`;
+                typeBadge = `<span class="badge badge-unconfigured">${escapeHtml(a.alert_type)}</span>`;
             }
 
             return `
                 <tr>
                     <td class="mono">#${a.id}</td>
-                    <td class="mono font-bold">${a.sn}</td>
+                    <td class="mono font-bold">${escapeHtml(a.sn)}</td>
                     <td class="mono">${timeStr}</td>
                     <td class="mono">Стекло ${a.pane_id}</td>
                     <td class="mono">Зона ${a.zone_id}</td>

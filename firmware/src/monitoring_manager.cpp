@@ -1,6 +1,7 @@
 #include "monitoring_manager.h"
 
 #include "flash_buffer.h"
+#include "device_identity.h"
 
 extern uint8_t currentMode;
 extern AlertJournal alertJournal;
@@ -8,10 +9,11 @@ extern AlertJournal alertJournal;
 MonitoringManager monitoringManager;
 
 MonitoringManager::MonitoringManager() {
-    lastCheckTime = 0;
+    lastCheckTime = millis();
     for (int i = 0; i < MAX_ZONES; i++) {
         obstructionStartMs[i] = 0;
         obstructionAlertSent[i] = false;
+        destructionAlertSent[i] = false;
     }
 }
 
@@ -31,12 +33,18 @@ void MonitoringManager::process() {
     for (uint8_t i = 0; i < count; i++) {
         const GlassZone &z = zones[i];
         
-        uint16_t avgDist = calculateAverageDistance(z, dists);
+        uint16_t validPointsCount = 0;
+        uint16_t avgDist = calculateAverageDistance(z, dists, validPointsCount);
+        
+        if (validPointsCount == 0) continue; // skip zone with no data
 
         // логика детекции
         if (avgDist == 0 || avgDist > z.baseline + z.tolerance) {
             // разбитие: превышение или уход луча в бесконечность
-            triggerAlert(z.paneId, z.zoneId, ALERT_DESTRUCTION, avgDist, z.baseline);
+            if (!destructionAlertSent[i]) {
+                triggerAlert(z.paneId, z.zoneId, ALERT_DESTRUCTION, avgDist, z.baseline);
+                destructionAlertSent[i] = true;
+            }
             
             // сбрасываем таймер перекрытия для этой зоны, так как стекло разбито
             obstructionStartMs[i] = 0;
@@ -50,7 +58,8 @@ void MonitoringManager::process() {
                 obstructionAlertSent[i] = false;
             } else {
                 // проверка истечения времени N минут
-                if (!obstructionAlertSent[i] && (now - obstructionStartMs[i] >= ZONE_OBSTRUCTION_DELAY_MS)) {
+                uint32_t delayMs = calibrationManager.getObstructionTimeoutMs();
+                if (!obstructionAlertSent[i] && (now - obstructionStartMs[i] >= delayMs)) {
                     triggerAlert(z.paneId, z.zoneId, ALERT_PROXIMITY, avgDist, z.baseline);
                     obstructionAlertSent[i] = true;
                 }
@@ -68,13 +77,14 @@ void MonitoringManager::process() {
                 obstructionStartMs[i] = 0;
                 obstructionAlertSent[i] = false;
             }
+            destructionAlertSent[i] = false;
         }
     }
 }
 
-uint16_t MonitoringManager::calculateAverageDistance(const GlassZone &zone, const uint16_t* dists) {
+uint16_t MonitoringManager::calculateAverageDistance(const GlassZone &zone, const uint16_t* dists, uint16_t &outCount) {
     uint32_t sum = 0;
-    uint16_t count = 0;
+    outCount = 0;
     
     int startA = (int)zone.startAngle;
     int endA = (int)zone.endAngle;
@@ -87,13 +97,13 @@ uint16_t MonitoringManager::calculateAverageDistance(const GlassZone &zone, cons
         uint16_t d = dists[a];
         if (d > 0) {
             sum += d;
-            count++;
+            outCount++;
         }
         if (a == endA) break;
         a = (a + 1) % 360;
     }
     
-    return count > 0 ? (uint16_t)(sum / count) : 0;
+    return outCount > 0 ? (uint16_t)(sum / outCount) : 0;
 }
 
 void MonitoringManager::triggerAlert(uint8_t paneId, uint8_t zoneId, AlertType type, uint16_t currentDist, uint16_t baseline) {
@@ -105,6 +115,8 @@ void MonitoringManager::triggerAlert(uint8_t paneId, uint8_t zoneId, AlertType t
     
     // генерация json пейлоада для немедленной публикации через mqtt
     JsonDocument doc;
+    const DeviceIdentity &identity = getDeviceIdentity();
+    doc["sn"] = identity.serialNumber;
     doc["pane_id"] = paneId;
     doc["zone_id"] = zoneId;
     

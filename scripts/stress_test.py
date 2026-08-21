@@ -153,7 +153,8 @@ def main():
     print("\nОчистка тестовых устройств из базы...")
     try:
         import sqlite3
-        db_path = "../server/lidar_network.db"
+        import os
+        db_path = os.path.join(os.path.dirname(__file__), "../server/lidar_network.db")
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute("DELETE FROM devices WHERE sn LIKE 'ESP-STRESS-%'")

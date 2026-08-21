@@ -11,7 +11,27 @@ from models import init_db, DeviceRepository
 from discovery_service import DiscoveryService
 from mqtt_service import MqttService
 
+import re
+
+def validate_sn(sn):
+    """проверка формата серийного номера устройства"""
+    return bool(re.match(r'^[A-Za-z0-9_-]{1,64}$', sn))
+
 app = Flask(__name__)
+
+@app.before_request
+def check_api_key():
+    # пропускаем проверку для страниц дашборда и статики
+    if request.path == '/' or request.path.startswith('/static/') or request.path.startswith('/device/'):
+        return
+    # если API_KEY не задан, пропускаем проверку (обратная совместимость)
+    if not config.API_KEY:
+        return
+    # проверка ключа в заголовке или параметре
+    provided_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+    if provided_key != config.API_KEY:
+        return jsonify({"error": "Требуется авторизация. Передайте API ключ в заголовке X-API-Key"}), 401
+
 
 # глобальные экземпляры сервисов
 discovery_service = DiscoveryService(
@@ -31,6 +51,8 @@ def index():
 
 @app.route('/device/<sn>')
 def device_calibration(sn):
+    if not validate_sn(sn):
+        return jsonify({"error": "Некорректный формат серийного номера"}), 400
     # страница калибровки и настройки конкретного устройства
     return render_template('device.html', sn=sn)
 
@@ -65,6 +87,8 @@ def get_devices():
 
 @app.route('/api/devices/<sn>', methods=['GET'])
 def get_device(sn):
+    if not validate_sn(sn):
+        return jsonify({"error": "Некорректный формат серийного номера"}), 400
     # получение детальной информации по конкретному серийному номеру
     try:
         device = DeviceRepository.get_device_by_sn(sn)
@@ -76,6 +100,8 @@ def get_device(sn):
 
 @app.route('/api/devices/<sn>/cmd', methods=['POST'])
 def send_device_cmd(sn):
+    if not validate_sn(sn):
+        return jsonify({"error": "Некорректный формат серийного номера"}), 400
     # отправка управляющей команды на устройство (по mqtt или udp)
     data = request.get_json() or {}
     cmd = data.get("cmd")
@@ -94,6 +120,8 @@ def send_device_cmd(sn):
 
 @app.route('/api/devices/<sn>/scan', methods=['GET'])
 def get_device_scan(sn):
+    if not validate_sn(sn):
+        return jsonify({"error": "Некорректный формат серийного номера"}), 400
     # получение последнего сырого скана (360 точек) для визуализации
     scan_data = DeviceRepository.get_raw_scan(sn)
     if not scan_data:
@@ -102,10 +130,30 @@ def get_device_scan(sn):
 
 @app.route('/api/devices/<sn>/calibrate', methods=['POST'])
 def send_calibration_data(sn):
+    if not validate_sn(sn):
+        return jsonify({"error": "Некорректный формат серийного номера"}), 400
     # отправка калибровочной конфигурации зон на устройство
     data = request.get_json()
     if not data or "panes" not in data:
         return jsonify({"error": "Неверный формат данных калибровки"}), 400
+
+    # валидация данных калибровки
+    total_zones = 0
+    for pane in data['panes']:
+        if not isinstance(pane.get('id'), int) or pane['id'] < 0:
+            return jsonify({"error": "Некорректный ID стекла"}), 400
+        for zone in pane.get('zones', []):
+            total_zones += 1
+            if total_zones > 24:
+                return jsonify({"error": "Превышен лимит зон (макс. 24)"}), 400
+            start_a = zone.get('start_a', -1)
+            end_a = zone.get('end_a', -1)
+            baseline = zone.get('baseline', 0)
+            tolerance = zone.get('tolerance', 0)
+            if not (0 <= start_a < 360 and 0 <= end_a < 360):
+                return jsonify({"error": f"Углы зоны вне диапазона 0-359"}), 400
+            if baseline <= 0 or tolerance <= 0:
+                return jsonify({"error": "baseline и tolerance должны быть > 0"}), 400
 
     topic = f"lidar/{sn}/calib_data"
     payload = json.dumps(data)
@@ -114,6 +162,34 @@ def send_calibration_data(sn):
         mqtt_service.client.publish(topic, payload)
         print(f"[CALIB] Настройки зон отправлены на узел {sn}")
         return jsonify({"status": "success", "message": "Калибровка отправлена на устройство"})
+    else:
+        return jsonify({"error": "MQTT брокер недоступен"}), 503
+
+@app.route('/api/devices/<sn>/diagnostics', methods=['POST'])
+def device_diagnostics(sn):
+    if not validate_sn(sn):
+        return jsonify({"error": "Некорректный формат серийного номера"}), 400
+    # диагностический режим: запрос дистанции на конкретном угле
+    data = request.get_json() or {}
+    angle = data.get("angle")
+    
+    if angle is None:
+        return jsonify({"error": "Не указан угол (angle)"}), 400
+        
+    cmd_payload = {
+        "cmd": "diagnostic",
+        "angle": angle
+    }
+    
+    success = mqtt_service.send_command(sn, cmd_payload)
+    
+    if success:
+        return jsonify({
+            "status": "success",
+            "message": f"Диагностический запрос для угла {angle} отправлен",
+            "sn": sn,
+            "angle": angle
+        })
     else:
         return jsonify({"error": "MQTT брокер недоступен"}), 503
 

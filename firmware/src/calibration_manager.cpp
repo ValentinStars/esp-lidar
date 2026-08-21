@@ -1,8 +1,9 @@
 #include "calibration_manager.h"
+#include <cmath>
 
 CalibrationManager calibrationManager;
 
-CalibrationManager::CalibrationManager() : zonesCount(0), lastScanSentTime(0) {
+CalibrationManager::CalibrationManager() : zonesCount(0), lastScanSentTime(0), obstructionTimeoutMs(60000) {
     // обнуление массива сканов
     for (int i = 0; i < 360; i++) {
         scanDistances[i] = 0;
@@ -33,6 +34,12 @@ void CalibrationManager::begin() {
         return;
     }
     
+    if (doc.containsKey("obstruction_timeout")) {
+        obstructionTimeoutMs = doc["obstruction_timeout"].as<uint32_t>() * 1000;
+    } else {
+        obstructionTimeoutMs = 60000;
+    }
+
     zonesCount = 0;
     JsonArray panes = doc["panes"];
     for (JsonObject pane : panes) {
@@ -56,20 +63,18 @@ void CalibrationManager::begin() {
 
 void CalibrationManager::processPoint(const LidarPoint &point) {
     // конвертация угла в индекс 0-359
-    int angleIdx = (int)point.angle;
+    int angleIdx = (int)roundf(point.angle) % 360;
     if (angleIdx >= 0 && angleIdx < 360) {
-        // фильтрация нулевых значений и обновление дистанции
-        if (point.distance > 0) {
-            scanDistances[angleIdx] = point.distance;
-        }
+        // сохраняем дистанцию (0 означает нет эха / бесконечность)
+        scanDistances[angleIdx] = point.distance;
     }
 }
 
-String CalibrationManager::getRawScanJson(const String& sn) {
+size_t CalibrationManager::getRawScanToBuffer(const String& sn, char* outBuffer, size_t bufferSize) {
     uint32_t now = millis();
     // отправка сырого скана каждые 2 секунды
     if (now - lastScanSentTime < 2000) {
-        return "";
+        return 0;
     }
     lastScanSentTime = now;
     
@@ -84,9 +89,7 @@ String CalibrationManager::getRawScanJson(const String& sn) {
         scanArray.add(scanDistances[i]);
     }
     
-    String output;
-    serializeJson(doc, output);
-    return output;
+    return serializeJson(doc, outBuffer, bufferSize);
 }
 
 bool CalibrationManager::saveZonesFromJson(const String& payload) {

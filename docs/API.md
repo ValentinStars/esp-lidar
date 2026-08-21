@@ -28,14 +28,19 @@
 
 ### Публикация от Устройства к Серверу
 
-*   **Топик:** `lidar/<sn>/heartbeat`
+*   **Топик:** `lidar/<sn>/telemetry`
     *   **Описание:** Отправляется каждые 15 секунд. Содержит телеметрию.
-    *   **Payload:** `{"uptime": 120, "free_heap": 250000, "valid_packets": 1500, "crc_errors": 0}`
+    *   **Payload:** `{"sn": "ESP-A1B2C3D4E5F6", "ip": "192.168.1.150", "status": "monitoring", "mode": 1, "uptime": 120, "free_heap": 250000, "alerts_count": 0, "lidar": {"valid_pkts": 1500, "crc_err": 0}}`
 
-*   **Топик:** `lidar/<sn>/alert`
+*   **Топик:** `lidar/<sn>/alerts`
     *   **Описание:** Отправляется при возникновении инцидента.
-    *   **Payload:** `{"pane_id": 1, "zone_id": 1, "alert_type": "destruction", "distance_mm": 500, "calib_dist_mm": 1200}`
+    *   **Payload:** `{"sn": "ESP-A1B2C3D4E5F6", "pane_id": 1, "zone_id": 1, "alert_type": "destruction", "distance_mm": 500, "calib_dist_mm": 1200, "delta_mm": 700}`
     *   *alert_type может быть: destruction (разрушение), proximity (приближение), restored (восстановлено).*
+
+
+*   **Топик:** `lidar/<sn>/raw_scan`
+    *   **Описание:** сырой скан 360 точек (режим калибровки).
+    *   **Payload:** `{"sn": "ESP-A1B2C3D4E5F6", "scan": [1200, 1201, 1199, ...]}`
 
 ### Публикация от Сервера к Устройству
 
@@ -44,8 +49,8 @@
     *   **Payload:** `{"cmd": "reboot"}` или `{"cmd": "start_monitoring"}` или `{"cmd": "start_calib"}`
 
 *   **Топик:** `lidar/<sn>/calib_data`
-    *   **Описание:** Конфигурация зон для стекла.
-    *   **Payload:** Массив JSON объектов с параметрами зон.
+    *   **Описание:** Конфигурация зон (от сервера к устройству).
+    *   **Payload:** `{"panes": [{"id": 1, "zones": [{"start_a": 0, "end_a": 90, "baseline": 1000, "tolerance": 100}]}]}`
 
 ## 3. HTTP API Сервера
 

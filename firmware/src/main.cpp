@@ -26,7 +26,7 @@ AlertJournal alertJournal;
 static uint32_t lastTelemetryTime = 0;
 
 // флаг трансляции сырого потока точек для живой визуализации
-static bool isLiveStreamEnabled = true;
+static bool isLiveStreamEnabled = false;
 
 // обработчик отдельной точки сканирования
 void onLidarPointReceived(const LidarPoint &point) {
@@ -155,9 +155,10 @@ void loop() {
     // логика работы режима калибровки
     if (currentMode == MODE_CALIBRATION && networkManager.isMqttConnected()) {
         const DeviceIdentity &identity = getDeviceIdentity();
-        String scanJson = calibrationManager.getRawScanJson(identity.serialNumber);
-        if (scanJson.length() > 0) {
-            networkManager.publishRawScan(scanJson.c_str());
+        static char scanBuffer[4096];
+        size_t len = calibrationManager.getRawScanToBuffer(String(identity.serialNumber), scanBuffer, sizeof(scanBuffer));
+        if (len > 0) {
+            networkManager.publishRawScan(scanBuffer);
         }
     }
 

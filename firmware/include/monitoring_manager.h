@@ -24,8 +24,11 @@ private:
     // флаги наличия отправленного алерта о перекрытии (чтобы не спамить)
     bool obstructionAlertSent[MAX_ZONES];
 
+    // флаги наличия отправленного алерта о разбитии (чтобы не спамить)
+    bool destructionAlertSent[MAX_ZONES];
+
     // внутренняя функция для расчета среднего расстояния в зоне
-    uint16_t calculateAverageDistance(const GlassZone &zone, const uint16_t* dists);
+    uint16_t calculateAverageDistance(const GlassZone &zone, const uint16_t* dists, uint16_t &outCount);
     
     // диспетчер отправки и записи алертов
     void triggerAlert(uint8_t paneId, uint8_t zoneId, AlertType type, uint16_t currentDist, uint16_t baseline);

@@ -21,7 +21,7 @@ struct FlashEvent {
     uint16_t currentDistanceMm;
     // калиброванная дистанция в миллиметрах
     uint16_t calibratedDistanceMm;
-};
+} __attribute__((packed));
 
 // структура метаданных кольцевого буфера flash
 struct FlashBufferMeta {
@@ -33,7 +33,7 @@ struct FlashBufferMeta {
     uint32_t totalPushed;
     // контрольная сигнатура целостности метаданных
     uint32_t magicSignature;
-};
+} __attribute__((packed));
 
 // класс управления энергонезависимым кольцевым буфером на 500 событий во flash
 class FlashBuffer {

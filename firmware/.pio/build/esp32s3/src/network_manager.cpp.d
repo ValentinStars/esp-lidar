@@ -194,4 +194,4 @@
  .pio/libdeps/esp32s3/ArduinoJson/src/ArduinoJson/Configuration.hpp \
  /home/valentin_stars/.platformio/packages/framework-arduinoespressif32/libraries/LittleFS/src/LittleFS.h \
  /home/valentin_stars/.platformio/packages/framework-arduinoespressif32/libraries/FS/src/FS.h \
- include/d500_parser.h
+ include/d500_parser.h include/flash_buffer.h

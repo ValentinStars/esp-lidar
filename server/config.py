@@ -22,3 +22,6 @@ DISCOVERY_PORT = int(os.getenv("DISCOVERY_PORT", 44444))
 # веб-сервер
 WEB_PORT = int(os.getenv("WEB_PORT", 8080))
 WEB_HOST = os.getenv("WEB_HOST", "0.0.0.0")
+
+# ключ авторизации для HTTP API (можно задать через переменную окружения)
+API_KEY = os.getenv("API_KEY", "")

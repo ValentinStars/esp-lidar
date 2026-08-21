@@ -3,6 +3,8 @@
 #include <ArduinoJson.h>
 #include <cstdio>
 #include <cstring>
+#include "alert_journal.h"
+#include "flash_buffer.h"
 
 // создание глобального экземпляра сетевого менеджера
 NetworkManager networkManager;
@@ -38,8 +40,9 @@ void NetworkManager::hardwareResetW5500() {
 
 // обработчик входящих команд по mqtt
 void NetworkManager::mqttCallback(char *topic, byte *payload, unsigned int length) {
+    if (length > 4096) return;
     // динамическое выделение памяти под полезную нагрузку
-    char* message = new char[length + 1];
+    char message[length + 1];
     memcpy(message, payload, length);
     message[length] = '\0';
 
@@ -57,13 +60,21 @@ void NetworkManager::mqttCallback(char *topic, byte *payload, unsigned int lengt
             } else if (cmd == "start_monitoring") {
                 currentMode = MODE_MONITORING;
                 Serial.println("[SYSTEM] Включен режим БОЕВОГО МОНИТОРИНГА");
+            } else if (cmd == "reboot") {
+                Serial.println("[SYSTEM] Перезагрузка по команде от сервера...");
+                Serial.flush();
+                delay(100);
+                ESP.restart();
+            } else if (cmd == "test_alert") {
+                extern AlertJournal alertJournal;
+                alertJournal.addAlert(0, 0, ALERT_DESTRUCTION, 9999, 1500);
+                flashBuffer.pushEvent(ALERT_DESTRUCTION, 0, 0, 9999, 1500);
+                Serial.println("[SYSTEM] Тестовый алерт сгенерирован по команде MQTT");
             }
         }
     } else if (strstr(topic, "/calib_data") != nullptr) {
         calibrationManager.saveZonesFromJson(String(message));
     }
-
-    delete[] message;
 }
 
 // инициализация ethernet интерфейса и mqtt
@@ -116,6 +127,7 @@ bool NetworkManager::begin(const DeviceIdentity &identity) {
 
     // настройка mqtt клиента
     mqttClient.setCallback(mqttCallback);
+    mqttClient.setSocketTimeout(3);
 
     // запуск прослушивания udp порта для автопоиска сервера
     discoveryUdp.begin(DISCOVERY_UDP_PORT);
@@ -196,6 +208,20 @@ void NetworkManager::maintainMqttConnection() {
             mqttClient.subscribe(topicCmd);
             mqttClient.subscribe(topicCalibData);
             Serial.printf("[MQTT] Подписка на топики: %s, %s\n", topicCmd, topicCalibData);
+            
+            // сброс накопленных офлайн-событий из flash буфера при восстановлении связи
+            if (flashBuffer.getCount() > 0) {
+                char batchBuf[2048];
+                size_t len = flashBuffer.serializeBatchToJson(batchBuf, sizeof(batchBuf), 50);
+                if (len > 0) {
+                    char offlineTopic[80];
+                    snprintf(offlineTopic, sizeof(offlineTopic), "lidar/%s/offline_events", identity.serialNumber);
+                    if (mqttClient.publish(offlineTopic, batchBuf)) {
+                        flashBuffer.clear();
+                        Serial.printf("[MQTT] Сброшено %u офлайн-событий из Flash буфера\n", (unsigned int)flashBuffer.getCount());
+                    }
+                }
+            }
         } else {
             Serial.printf("[MQTT] Ошибка подключения (код состояния: %d)\n", mqttClient.state());
         }

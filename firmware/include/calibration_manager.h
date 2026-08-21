@@ -29,7 +29,7 @@ public:
     
     // генерация json пакета с сырым сканом (для режима MODE_CALIBRATION)
     // возвращает сформированную строку, если прошло достаточно времени (каждые 2 сек)
-    String getRawScanJson(const String& sn);
+    size_t getRawScanToBuffer(const String& sn, char* outBuffer, size_t bufferSize);
     
     // сохранение полученной от сервера конфигурации зон в littlefs
     bool saveZonesFromJson(const String& payload);
@@ -37,6 +37,9 @@ public:
     // получение текущего списка зон
     const GlassZone* getZones() const { return zones; }
     uint8_t getZonesCount() const { return zonesCount; }
+    
+    // получение таймаута на перекрытие
+    uint32_t getObstructionTimeoutMs() const { return obstructionTimeoutMs; }
     
     // доступ к текущему радиальному скану (360 точек)
     const uint16_t* getScanDistances() const { return scanDistances; }
@@ -51,6 +54,9 @@ private:
     
     // таймер отправки сырого скана
     uint32_t lastScanSentTime;
+    
+    // таймаут на перекрытие в мс
+    uint32_t obstructionTimeoutMs;
     
     // путь к файлу конфигурации во flash
     const char* configFilePath = "/calib.json";
