@@ -48,8 +48,16 @@
 // максимальная емкость локального кольцевого журнала алертов в оперативной памяти
 #define ALERT_JOURNAL_CAPACITY 10
 
-// таймаут сторожевого таймера watchdog в секундах (5 секунд)
-#define WATCHDOG_TIMEOUT_SECONDS 5
+// таймаут сторожевого таймера watchdog в секундах (увеличено для медленных сетей)
+#define WATCHDOG_TIMEOUT_SECONDS 30
+
+// ==========================================
+// НАСТРОЙКИ СЕТИ (IP / МАСКА / ШЛЮЗ)
+// ==========================================
+#define USE_STATIC_IP false
+#define STATIC_IP_ADDR "192.168.1.100"
+#define STATIC_NETMASK "255.255.255.0"
+#define STATIC_GATEWAY "192.168.1.1"
 
 // максимальное количество сохраняемых офлайн-событий во flash памяти littlefs
 #define MAX_OFFLINE_EVENTS 500

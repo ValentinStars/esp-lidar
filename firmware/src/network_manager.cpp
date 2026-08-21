@@ -97,21 +97,31 @@ bool NetworkManager::begin(const DeviceIdentity &identity) {
     // выбор пина chip select для библиотеки ethernet
     Ethernet.init(W5500_CS_PIN);
 
-    // попытка получения сетевого адреса по dhcp с коротким таймаутом (4 секунды)
     uint8_t mac[6];
     memcpy(mac, identity.macAddressRaw, 6);
-    
-    Serial.printf("[ETHERNET] Запрос IP по DHCP для MAC: %s\n", identity.macAddressStr);
-    int dhcpSuccess = Ethernet.begin(mac, 4000, 1000);
 
-    if (dhcpSuccess == 0) {
-        // если dhcp сервер не ответил, назначаем статический резервный ip
-        Serial.println("[ETHERNET] DHCP не ответил, применение резервного IP (192.168.1.199)");
-        IPAddress fallbackIP(192, 168, 1, 199);
-        IPAddress fallbackDNS(192, 168, 1, 1);
-        IPAddress fallbackGateway(192, 168, 1, 1);
-        IPAddress fallbackSubnet(255, 255, 255, 0);
-        Ethernet.begin(mac, fallbackIP, fallbackDNS, fallbackGateway, fallbackSubnet);
+    // попытаемся применить статический IP, если включено в config.h
+    if (USE_STATIC_IP) {
+        Serial.printf("[ETHERNET] Использование статического IP: %s\n", STATIC_IP_ADDR);
+        IPAddress ip, dns(8,8,8,8), gateway, subnet;
+        ip.fromString(STATIC_IP_ADDR);
+        gateway.fromString(STATIC_GATEWAY);
+        subnet.fromString(STATIC_NETMASK);
+        Ethernet.begin(mac, ip, dns, gateway, subnet);
+    } else {
+        // попытка получения сетевого адреса по dhcp с коротким таймаутом (4 секунды)
+        Serial.printf("[ETHERNET] Запрос IP по DHCP для MAC: %s\n", identity.macAddressStr);
+        int dhcpSuccess = Ethernet.begin(mac, 4000, 1000);
+
+        if (dhcpSuccess == 0) {
+            // если dhcp сервер не ответил, назначаем статический резервный ip
+            Serial.println("[ETHERNET] DHCP не ответил, применение резервного IP (192.168.1.199)");
+            IPAddress fallbackIP(192, 168, 1, 199);
+            IPAddress fallbackDNS(192, 168, 1, 1);
+            IPAddress fallbackGateway(192, 168, 1, 1);
+            IPAddress fallbackSubnet(255, 255, 255, 0);
+            Ethernet.begin(mac, fallbackIP, fallbackDNS, fallbackGateway, fallbackSubnet);
+        }
     }
 
     // проверка статуса аппаратного чипа w5500
