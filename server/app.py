@@ -157,13 +157,17 @@ def send_calibration_data(sn):
 
     topic = f"lidar/{sn}/calib_data"
     payload = json.dumps(data)
+    
+    # Сохраняем в базу данных сервера как "мега конфиг"
+    DeviceRepository.update_config(sn, data)
 
     if mqtt_service.is_connected and mqtt_service.client:
         mqtt_service.client.publish(topic, payload)
-        print(f"[CALIB] Настройки зон отправлены на узел {sn}")
-        return jsonify({"status": "success", "message": "Калибровка отправлена на устройство"})
+        print(f"[CALIB] Настройки зон отправлены на узел {sn} и сохранены в БД сервера")
+        return jsonify({"status": "success", "message": "Калибровка сохранена и отправлена на устройство"})
     else:
-        return jsonify({"error": "MQTT брокер недоступен"}), 503
+        # Даже если MQTT недоступен, мы сохранили в БД.
+        return jsonify({"status": "partial", "message": "Конфигурация сохранена на сервере, но MQTT недоступен для отправки"}), 202
 
 @app.route('/api/devices/<sn>/diagnostics', methods=['POST'])
 def device_diagnostics(sn):

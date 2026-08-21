@@ -103,6 +103,13 @@ class MqttService:
                         valid_pkts=valid_pkts, crc_errors=crc_err,
                         alerts_count=alerts_count, status=status, mode=mode
                     )
+                    
+                    # Auto-push mega-config if ESP is unconfigured but server has config
+                    if status == "unconfigured":
+                        dev = DeviceRepository.get_device(sn)
+                        if dev and dev.get("config_json"):
+                            self.client.publish(f"lidar/{sn}/calib_data", dev["config_json"])
+                            print(f"[MQTT] Авто-восстановление конфига для {sn}")
                 except Exception as e:
                     print(f"[MQTT] Ошибка записи телеметрии: {e}")
 

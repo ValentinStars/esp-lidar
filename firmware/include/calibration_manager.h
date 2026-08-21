@@ -6,7 +6,7 @@
 
 // структура зоны контроля стекла
 struct GlassZone {
-    uint8_t paneId;         // номер стекла (0-5)
+    uint8_t paneId;         // номер стекла (без ограничений, 0-255)
     uint8_t zoneId;         // номер зоны внутри стекла
     float startAngle;       // начальный угол зоны
     float endAngle;         // конечный угол зоны
@@ -14,7 +14,7 @@ struct GlassZone {
     uint16_t tolerance;     // допустимое отклонение в мм
 };
 
-#define MAX_ZONES 24
+#define MAX_ZONES 128
 
 // менеджер режима калибровки
 class CalibrationManager {
