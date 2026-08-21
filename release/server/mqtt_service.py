@@ -45,10 +45,9 @@ class MqttService:
                 self.client.connect(self.broker_host, self.broker_port, keepalive=30)
                 self.client.loop_forever()
             except Exception as e:
-                print(f"[MQTT SERVICE] Ожидание брокера ({self.broker_host}:{self.broker_port})... {e}")
-            finally:
                 self.is_connected = False
-                # пауза перед повторной попыткой при отсутствии запущенного брокера или дисконнекте
+                print(f"[MQTT SERVICE] Ожидание брокера ({self.broker_host}:{self.broker_port})... {e}")
+                # пауза перед повторной попыткой при отсутствии запущенного брокера
                 time.sleep(5)
 
     def _on_connect(self, client, userdata, flags, rc, *args):
@@ -60,9 +59,8 @@ class MqttService:
             # подписка на телеметрию и алерты со всех лидар-узлов
             client.subscribe("lidar/+/telemetry")
             client.subscribe("lidar/+/alerts")
-            client.subscribe("lidar/+/offline_events")
             client.subscribe("lidar/+/raw_scan")
-            print("[MQTT SERVICE] Осуществлена подписка на топики: lidar/+/telemetry, lidar/+/alerts, lidar/+/offline_events, lidar/+/raw_scan")
+            print("[MQTT SERVICE] Осуществлена подписка на топики: lidar/+/telemetry, lidar/+/alerts, lidar/+/raw_scan")
         else:
             self.is_connected = False
             print(f"[MQTT SERVICE] Ошибка подключения к брокеру, код: {rc_val}")
@@ -106,30 +104,22 @@ class MqttService:
                 except Exception as e:
                     print(f"[MQTT] Ошибка записи телеметрии: {e}")
 
-        # обработка входящих алертов и батчей из оффлайн-буфера
-        elif topic.endswith("/alerts") or topic.endswith("/offline_events"):
-            sn = payload.get("sn") if isinstance(payload, dict) else topic_sn
-            
-            # Если пришел батч (массив) из оффлайн буфера
-            alerts_list = payload if isinstance(payload, list) else [payload]
-            
-            for alert in alerts_list:
-                if not isinstance(alert, dict):
-                    continue
-                
-                # Поддержка формата из flash_buffer.cpp (type, dist, calib)
-                pane_id = alert.get("pane_id", alert.get("pane", 0))
-                zone_id = alert.get("zone_id", alert.get("zone", 0))
-                alert_type = alert.get("alert_type", alert.get("type", "unknown"))
-                dist = alert.get("distance_mm", alert.get("dist", 0))
-                calib = alert.get("calib_dist_mm", alert.get("calib", 0))
-                delta = alert.get("delta_mm", alert.get("delta", dist - calib if dist and calib else 0))
+        # обработка входящих алертов
+        elif topic.endswith("/alerts"):
+            sn = payload.get("sn") or topic_sn
+            if sn:
+                pane_id = payload.get("pane_id", payload.get("pane", 0))
+                zone_id = payload.get("zone_id", payload.get("zone", 0))
+                alert_type = payload.get("alert_type", payload.get("type", "unknown"))
+                dist = payload.get("distance_mm", payload.get("dist", 0))
+                calib = payload.get("calib_dist_mm", payload.get("calib", 0))
+                delta = payload.get("delta_mm", payload.get("delta", 0))
 
                 try:
                     DeviceRepository.record_alert(
                         sn=sn, pane_id=pane_id, zone_id=zone_id,
                         alert_type=alert_type, dist=dist, calib=calib, delta=delta,
-                        raw_json=json.dumps(alert) if isinstance(payload, list) else payload_str
+                        raw_json=payload_str
                     )
                 except Exception as e:
                     print(f"[MQTT] Ошибка записи алерта: {e}")

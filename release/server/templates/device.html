@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiDAR Calibration — {{ sn }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .calibration-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 24px;
+            margin-top: 20px;
+        }
+        .canvas-wrapper {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            position: relative;
+            aspect-ratio: 1;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        canvas {
+            background: #0a0c10;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+        .controls-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .zone-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .zone-card.active {
+            border-color: var(--accent-blue);
+            background: rgba(88, 166, 255, 0.1);
+        }
+        .zone-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .zone-inputs input {
+            width: 100%;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 6px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="glass-header">
+            <div class="header-brand">
+                <a href="/" class="btn btn-secondary btn-sm" style="text-decoration: none;">← Назад</a>
+                <div class="brand-text" style="margin-left: 16px;">
+                    <h1>Калибровка зон остекления</h1>
+                    <span class="sub-brand">Узел: {{ sn }}</span>
+                </div>
+            </div>
+            <div class="header-status">
+                <button class="btn btn-primary" id="btnStartCalibMode">Включить режим 2 (Стриминг)</button>
+            </div>
+        </header>
+
+        <div class="calibration-container">
+            <!-- интерактивный радар -->
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                <div class="glass-card">
+                    <div class="section-header">
+                        <h3>Полярная карта точек (Live)</h3>
+                        <span class="badge badge-monitoring" id="scanStatusBadge">Ожидание данных...</span>
+                    </div>
+                    <div class="canvas-wrapper">
+                        <canvas id="lidarCanvas" width="800" height="800"></canvas>
+                    </div>
+                    <p class="text-muted" style="margin-top:12px; font-size:0.8rem;">Используйте мышь для выделения секторов на радаре. Зажмите ЛКМ и тяните по кругу для создания зоны.</p>
+                </div>
+                
+                <!-- панель диагностики -->
+                <div class="glass-card">
+                    <div class="section-header">
+                        <h3>Диагностика лидара</h3>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 12px; font-family: 'JetBrains Mono', monospace;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px;">
+                            <span>Курсор (Угол): <strong id="diagHoverAngle" style="color: var(--accent-blue);">--°</strong></span>
+                            <span>Дистанция: <strong id="diagHoverDist" style="color: var(--accent-green);">-- мм (-- см)</strong></span>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px;">
+                            <label style="font-size: 0.9rem;">Точный запрос:</label>
+                            <input type="number" id="diagManualAngle" min="0" max="359" placeholder="Угол °" style="width: 80px; padding: 6px; background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); color: white; border-radius: 4px;">
+                            <button class="btn btn-secondary btn-sm" onclick="queryManualAngle()">Запросить</button>
+                            <span id="diagManualResult" style="margin-left: auto; color: var(--text-main);">-- мм</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- панель настроек зон -->
+            <div class="glass-card controls-panel">
+                <div class="section-header">
+                    <h3>Конфигурация стёкол</h3>
+                    <div>
+                        <button class="btn btn-secondary btn-sm" id="btnAddPane">+ Добавить стекло</button>
+                    </div>
+                </div>
+
+                <div id="panesContainer" style="max-height: 500px; overflow-y: auto; padding-right: 8px; display: flex; flex-direction: column; gap: 12px;">
+                    <!-- карточки стекол генерируются js -->
+                </div>
+
+                <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 10px;">
+                    <button class="btn btn-primary" id="btnSaveZones" style="width: 100%; padding: 12px; font-size: 1rem;">Сохранить и отправить на контроллер</button>
+                    <button class="btn btn-secondary" id="btnMonitoringMode" style="width: 100%;">Включить Боевой Режим (3)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- передача sn в клиентский js -->
+    <script>
+        const DEVICE_SN = "{{ sn }}";
+    </script>
+    <script src="/static/js/calibration.js"></script>
+</body>
+</html>

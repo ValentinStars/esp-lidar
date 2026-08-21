@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiDAR IoT Network — Glass Monitoring Control Center</title>
+    <!-- шрифты inter и jetbrains mono для современного промышленного интерфейса -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- верхняя панель навигации -->
+        <header class="glass-header">
+            <div class="header-brand">
+                <div class="logo-pulse"></div>
+                <div class="brand-text">
+                    <h1>LiDAR IoT Network</h1>
+                    <span class="sub-brand">Glass Integrity Monitoring Hub (100+ Nodes)</span>
+                </div>
+            </div>
+            <div class="header-status">
+                <div class="status-pill" id="mqttStatusBadge">
+                    <span class="dot"></span>
+                    <span class="text">MQTT: Connecting</span>
+                </div>
+                <div class="status-pill online" id="serverTimeBadge">
+                    <span class="clock-icon">🕒</span>
+                    <span class="text" id="liveClock">00:00:00</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- карточки ключевых метрик -->
+        <section class="metrics-grid">
+            <div class="metric-card glass-card">
+                <div class="metric-icon blue">📡</div>
+                <div class="metric-data">
+                    <span class="metric-label">Всего устройств</span>
+                    <h2 class="metric-value" id="metricTotalDevices">0</h2>
+                </div>
+            </div>
+            <div class="metric-card glass-card">
+                <div class="metric-icon green">⚡</div>
+                <div class="metric-data">
+                    <span class="metric-label">Активно Онлайн</span>
+                    <h2 class="metric-value text-green" id="metricOnlineDevices">0</h2>
+                </div>
+            </div>
+            <div class="metric-card glass-card">
+                <div class="metric-icon yellow">⚠️</div>
+                <div class="metric-data">
+                    <span class="metric-label">Офлайн / Таймаут</span>
+                    <h2 class="metric-value text-yellow" id="metricOfflineDevices">0</h2>
+                </div>
+            </div>
+            <div class="metric-card glass-card">
+                <div class="metric-icon red">🚨</div>
+                <div class="metric-data">
+                    <span class="metric-label">Зафиксировано Алертов</span>
+                    <h2 class="metric-value text-red" id="metricTotalAlerts">0</h2>
+                </div>
+            </div>
+        </section>
+
+        <!-- основной контент: таблица устройств и журнал событий -->
+        <main class="main-layout">
+            <!-- секция зарегистрированных устройств -->
+            <section class="glass-card table-section">
+                <div class="section-header">
+                    <div class="title-with-badge">
+                        <h3>Реестр узлов мониторинга (Auto-Discovery)</h3>
+                        <span class="counter-badge" id="devicesCountBadge">0</span>
+                    </div>
+                    <div class="section-actions">
+                        <button class="btn btn-secondary" onclick="fetchDevicesData()">Обновить 🔄</button>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Статус</th>
+                                <th>Серийный номер (SN)</th>
+                                <th>IP адрес</th>
+                                <th>MAC</th>
+                                <th>Режим</th>
+                                <th>Uptime</th>
+                                <th>Free Heap</th>
+                                <th>LiDAR Пакеты</th>
+                                <th>CRC Ошибки</th>
+                                <th>Алерты</th>
+                                <th>Активность</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="devicesTableBody">
+                            <tr>
+                                <td colspan="12" class="text-center py-4">Ожидание первого Auto-Discovery сигнала от устройств...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- секция ленты алертов -->
+            <section class="glass-card table-section">
+                <div class="section-header">
+                    <div class="title-with-badge">
+                        <h3>Лента последних инцидентов и алертов</h3>
+                        <span class="counter-badge alert" id="alertsCountBadge">0</span>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Узел SN</th>
+                                <th>Время</th>
+                                <th>Стекло #</th>
+                                <th>Зона #</th>
+                                <th>Тип события</th>
+                                <th>Дистанция</th>
+                                <th>Калибровка</th>
+                                <th>Дельта (Δ)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="alertsTableBody">
+                            <tr>
+                                <td colspan="9" class="text-center py-4 text-muted">Алертов не зафиксировано. Все зоны в норме.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+
+        <!-- футер -->
+        <footer class="glass-footer">
+            <span>LiDAR IoT Glass Integrity Network • Industrial Bus Stop Security System</span>
+            <span>ESP32-S3-ETH + LDROBOT D500 • v1.0.0</span>
+        </footer>
+    </div>
+
+    <!-- модальное окно отправки команд -->
+    <div class="modal-backdrop" id="cmdModal" style="display: none;">
+        <div class="modal glass-card">
+            <div class="modal-header">
+                <h3 id="modalDeviceSn">Команда для устройства</h3>
+                <button class="close-btn" onclick="closeCmdModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Выберите действие:</label>
+                    <select id="cmdSelect" class="form-control">
+                        <option value="start_calib">Запустить калибровку всех 6 стёкол (Режим 2)</option>
+                        <option value="start_monitoring">Перевести в режим боевого мониторинга (Режим 3)</option>
+                        <option value="test_alert">Сгенерировать тестовый алерт</option>
+                        <option value="reboot">Перезагрузить контроллер (Software Reboot)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeCmdModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="sendSelectedCommand()">Отправить команду 🚀</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
